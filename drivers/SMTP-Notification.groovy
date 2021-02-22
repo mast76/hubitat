@@ -5,7 +5,7 @@
  *
  */
 metadata {
-    definition(name: "SMTP Notification", namespace: "stenderup", author: "Martin Stenderup", importUrl: "") {
+    definition(name: "SMTP Notification", namespace: "stenderup", author: "Martin Stenderup", importUrl: "https://raw.githubusercontent.com/mast76/hubitat/main/drivers/SMTP-Notification.groovy") {
         capability "Notification"
     }
 }
