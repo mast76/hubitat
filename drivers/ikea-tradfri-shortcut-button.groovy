@@ -1,7 +1,11 @@
 /**
- *  Ikea Tradfri Shortcut Button
+ *  Ikea TRÅDFRI Shortcut Button
  *
+ *  Original Smartthings implementation:
  *  Copyright 2015, 2021 Mitch Pond / iquix
+ *
+ *  Hubitat port:
+ *  Copyright 2021, Martin Stenderup / mast76
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -15,21 +19,20 @@
  */
 
 import groovy.json.JsonOutput
-import physicalgraph.zigbee.zcl.DataType
+import hubitat.zigbee.zcl.DataType
 
 metadata {
-    //definition (name: "Ikea Tradfri Shortcut Button", namespace: "smartthings", author: "Mitch Pond/iquix", runLocally: true, minHubCoreVersion: "000.022.0002", executeCommandsLocally: false, ocfDeviceType: "x.com.st.d.remotecontroller") {
-    definition (name: "Ikea Tradfri Shortcut Button", namespace: "iquix", author: "Mitch Pond/iquix", ocfDeviceType: "x.com.st.d.remotecontroller") {
+    definition (name: "Ikea TRADFRI Shortcut Button", namespace: "mast76", author: "Martin Stenderup", importUrl: "https://raw.githubusercontent.com/mast76/hubitat/main/drivers/ikea-tradfri-shortcut-button.groovy") {
         capability "Actuator"
         capability "Battery"
-        capability "Button"
-        capability "Holdable Button"        
+        capability "PushableButton"
+        capability "HoldableButton"        
         capability "Configuration"
         capability "Refresh"
         capability "Sensor"
-        capability "Health Check"
+        capability "HealthCheck"
 
-        fingerprint manufacturer: "IKEA of Sweden", model: "TRADFRI SHORTCUT Button", deviceJoinName: "IKEA Remote Control", mnmn: "SmartThings", vid: "generic-button-2" 
+        fingerprint model: "TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", profileId:"0104", inClusters:"0000,0001,0003,0009,0020,1000", outClusters:"0003,0004,0006,0008,0019,0102,1000", application:"21" 
     }
 
     simulator {}
@@ -59,6 +62,7 @@ metadata {
 }
 
 def parse(String description) {
+    log.trace "parse"
     log.debug "description is $description"
     def event = zigbee.getEvent(description)
     if (event) {
@@ -83,13 +87,15 @@ def parse(String description) {
 
         if (description?.startsWith('enroll request')) {
             List cmds = zigbee.enrollResponse()
-            result = cmds?.collect { new physicalgraph.device.HubAction(it) }
+            result = cmds?.collect { new hubitat.device.HubAction(it) }
         }
         return result
     }
 }
 
 private Map parseIasButtonMessage(String description) {
+    log.trace "parseIasButtonMessage"
+    log.debug "description is $description"
     def zs = zigbee.parseZoneStatus(description)
     return zs.isAlarm2Set() ? getButtonResult("press") : getButtonResult("release")
 }
@@ -98,6 +104,7 @@ private Map getBatteryResult(rawValue) {
     log.debug 'Battery'
     def volts = rawValue / 10
     if (volts > 3.0 || volts == 0 || rawValue == 0xFF) {
+        log.debug 'Battery n/a'
         return [:]
     }
     else {
@@ -110,11 +117,13 @@ private Map getBatteryResult(rawValue) {
         result.value = Math.min(100, (int)(pct * 100))
         def linkText = getLinkText(device)
         result.descriptionText = "${linkText} battery was ${result.value}%"
+        log.debug 'Battery "${result.descriptionText}"'
         return result
     }
 }
 
 private Map parseNonIasButtonMessage(Map descMap){
+    log.debug "parseNonIasButtonMessage"
     def buttonState = ""
     def buttonNumber = 0
     if ((device.getDataValue("model") == "3460-L") &&(descMap.clusterInt == 0x0006)) {
@@ -159,7 +168,7 @@ private Map parseNonIasButtonMessage(Map descMap){
         }
         if (buttonNumber !=0) {
             def descriptionText = "$device.displayName button $buttonNumber was $buttonState"
-            return createEvent(name: "button", value: buttonState, data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true)
+            return createEvent(name: buttonState, value: buttonNumber, descriptionText: descriptionText, isStateChange: true)
         }
         else {
             return [:]
@@ -189,25 +198,26 @@ def refresh() {
 
 def configure() {
     log.debug "Configuring Reporting, IAS CIE, and Bindings."
-    def cmds = []
-    if (device.getDataValue("model") == "3450-L") {
-        cmds << [
-                "zdo bind 0x${device.deviceNetworkId} 1 1 6 {${device.zigbeeId}} {}", "delay 300",
-                "zdo bind 0x${device.deviceNetworkId} 2 1 6 {${device.zigbeeId}} {}", "delay 300",
-                "zdo bind 0x${device.deviceNetworkId} 3 1 6 {${device.zigbeeId}} {}", "delay 300",
-                "zdo bind 0x${device.deviceNetworkId} 4 1 6 {${device.zigbeeId}} {}", "delay 300"
-        ]
-    }
-    return zigbee.onOffConfig() +
-            zigbee.levelConfig() +
-            zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20, DataType.UINT8, 30, 21600, 0x01) +
-            zigbee.enrollResponse() +
-            zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20) +
-            cmds
+    List<String> cmds = []
+    cmds.addAll(zigbee.onOffConfig())
+    cmds.addAll(zigbee.levelConfig())
+    cmds.addAll(zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20, DataType.UINT8, 30, 21600, 0x01))
+    cmds.addAll(zigbee.enrollResponse())
+    cmds.addAll(zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20))
+    log.debug (device.getDataValue("model"))
+    cmds.addAll(
+        "zdo bind 0x${device.deviceNetworkId} 1 1 6 {${device.zigbeeId}} {}", "delay 300",
+        "zdo bind 0x${device.deviceNetworkId} 2 1 6 {${device.zigbeeId}} {}", "delay 300",
+        "zdo bind 0x${device.deviceNetworkId} 3 1 6 {${device.zigbeeId}} {}", "delay 300",
+        "zdo bind 0x${device.deviceNetworkId} 4 1 6 {${device.zigbeeId}} {}", "delay 300"
+    )
+    return cmds
 
 }
 
 private Map getButtonResult(buttonState, buttonNumber = 1) {
+    log.trace "getButtonResult"
+    log.debug "buttonState = $bubuttonState, buttonNumber = buttonNumber"
     if (buttonState == 'release') {
         log.debug "Button was value : $buttonState"
         if(state.pressTime == null) {
@@ -230,7 +240,7 @@ private Map getButtonResult(buttonState, buttonNumber = 1) {
                 buttonState = "held"
             }
             def descriptionText = "$device.displayName button $buttonNumber was $buttonState"
-            return createEvent(name: "button", value: buttonState, data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true)
+            return createEvent(name: buttonState, value: buttonNumber, descriptionText: descriptionText, isStateChange: true)
         }
     }
     else if (buttonState == 'press') {
@@ -246,41 +256,19 @@ def installed() {
 
     // Initialize default states
     device.currentValue("numberOfButtons")?.times {
-        sendEvent(name: "button", value: "pushed", data: [buttonNumber: it+1], displayed: false)
+        sendEvent(name: "pushed", value: it+1, displayed: false)
     }
 }
 
 def updated() {
     initialize()
 }
-
 def initialize() {
     // Arrival sensors only goes OFFLINE when Hub is off
     sendEvent(name: "DeviceWatch-Enroll", value: JsonOutput.toJson([protocol: "zigbee", scheme:"untracked"]), displayed: false)
-    if ((device.getDataValue("manufacturer") == "OSRAM") && (device.getDataValue("model") == "LIGHTIFY Dimming Switch")) {
-        sendEvent(name: "numberOfButtons", value: 2, displayed: false)
-    }
-    else if (device.getDataValue("manufacturer") == "CentraLite") {
-        if (device.getDataValue("model") == "3130") {
-            sendEvent(name: "numberOfButtons", value: 2, displayed: false)
-        }
-        else if ((device.getDataValue("model") == "3455-L") || (device.getDataValue("model") == "3460-L")) {
-            sendEvent(name: "numberOfButtons", value: 1, displayed: false)
-        }
-        else if (device.getDataValue("model") == "3450-L") {
-            sendEvent(name: "numberOfButtons", value: 4, displayed: false)
-        }
-        else {
-            sendEvent(name: "numberOfButtons", value: 4, displayed: false)    //default case. can be changed later.
-        }
-    }
-    else if ((device.getDataValue("manufacturer") == "IKEA of Sweden") && (device.getDataValue("model") == "TRADFRI SHORTCUT Button")) {
-        sendEvent(name: "numberOfButtons", value: 1, displayed: false)
-        sendEvent(name: "supportedButtonValues", value: ["pushed", "held"].encodeAsJSON(), displayed: false)
-    }    
-    else {
-        //default. can be changed
-        sendEvent(name: "numberOfButtons", value: 4, displayed: false)
-    }
+    sendEvent(name: "numberOfButtons", value: 1, displayed: false)
+}
 
+def ping() {
+    log.debug 'Pinging'
 }
