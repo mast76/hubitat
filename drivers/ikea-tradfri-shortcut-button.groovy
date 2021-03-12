@@ -38,6 +38,10 @@ metadata {
     simulator {}
 
     preferences {
+	    section {
+			input(name: "debugLogging", type: "bool", title: "Enable debug logging", description: "", defaultValue: false, submitOnChange: true, displayDuringSetup: false, required: false)
+			input(name: "traceLogging", type: "bool", title: "Enable trace logging", description: "", defaultValue: false, submitOnChange: true, displayDuringSetup: false, required:false)			
+		}
         section {
             input ("holdTime", "number", title: "Minimum time in seconds for a press to count as \"held\"", defaultValue: 0.5, displayDuringSetup: false)
         }
@@ -61,9 +65,21 @@ metadata {
     }
 }
 
+def logDebug(String msg) {
+	if(debugLogging) {
+		log.debug msg
+	}
+}
+
+def logTrace(String msg) {
+	if(traceLogging){
+		logTrace msg
+	}
+}
+
 def parse(String description) {
-    log.trace "parse"
-    log.debug "description is $description"
+    logTrace "parse"
+    logDebug "description is $description"
     def event = zigbee.getEvent(description)
     if (event) {
         sendEvent(event)
@@ -82,7 +98,7 @@ def parse(String description) {
             event = parseIasButtonMessage(description)
         }
 
-        log.debug "Parse returned $event"
+        logDebug "Parse returned $event"
         def result = event ? createEvent(event) : []
 
         if (description?.startsWith('enroll request')) {
@@ -94,17 +110,17 @@ def parse(String description) {
 }
 
 private Map parseIasButtonMessage(String description) {
-    log.trace "parseIasButtonMessage"
-    log.debug "description is $description"
+    logTrace "parseIasButtonMessage"
+    logDebug "description is $description"
     def zs = zigbee.parseZoneStatus(description)
     return zs.isAlarm2Set() ? getButtonResult("press") : getButtonResult("release")
 }
 
 private Map getBatteryResult(rawValue) {
-    log.debug 'Battery'
+    logDebug 'Battery'
     def volts = rawValue / 10
     if (volts > 3.0 || volts == 0 || rawValue == 0xFF) {
-        log.debug 'Battery n/a'
+        logDebug 'Battery n/a'
         return [:]
     }
     else {
@@ -117,13 +133,13 @@ private Map getBatteryResult(rawValue) {
         result.value = Math.min(100, (int)(pct * 100))
         def linkText = getLinkText(device)
         result.descriptionText = "${linkText} battery was ${result.value}%"
-        log.debug 'Battery "${result.descriptionText}"'
+        logDebug 'Battery "${result.descriptionText}"'
         return result
     }
 }
 
 private Map parseNonIasButtonMessage(Map descMap){
-    log.debug "parseNonIasButtonMessage"
+    logDebug "parseNonIasButtonMessage"
     def buttonState = ""
     def buttonNumber = 0
     if ((device.getDataValue("model") == "3460-L") &&(descMap.clusterInt == 0x0006)) {
@@ -190,21 +206,21 @@ private Map parseNonIasButtonMessage(Map descMap){
 }
 
 def refresh() {
-    log.debug "Refreshing Battery"
+    logDebug "Refreshing Battery"
 
     return zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20) +
             zigbee.enrollResponse()
 }
 
 def configure() {
-    log.debug "Configuring Reporting, IAS CIE, and Bindings."
+    logDebug "Configuring Reporting, IAS CIE, and Bindings."
     List<String> cmds = []
     cmds.addAll(zigbee.onOffConfig())
     cmds.addAll(zigbee.levelConfig())
     cmds.addAll(zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20, DataType.UINT8, 30, 21600, 0x01))
     cmds.addAll(zigbee.enrollResponse())
     cmds.addAll(zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20))
-    log.debug (device.getDataValue("model"))
+    logDebug (device.getDataValue("model"))
     cmds.addAll(
         "zdo bind 0x${device.deviceNetworkId} 1 1 6 {${device.zigbeeId}} {}", "delay 300",
         "zdo bind 0x${device.deviceNetworkId} 2 1 6 {${device.zigbeeId}} {}", "delay 300",
@@ -216,10 +232,10 @@ def configure() {
 }
 
 private Map getButtonResult(buttonState, buttonNumber = 1) {
-    log.trace "getButtonResult"
-    log.debug "buttonState = $bubuttonState, buttonNumber = buttonNumber"
+    logTrace "getButtonResult"
+    logDebug "buttonState = $bubuttonState, buttonNumber = buttonNumber"
     if (buttonState == 'release') {
-        log.debug "Button was value : $buttonState"
+        logDebug "Button was value : $buttonState"
         if(state.pressTime == null) {
             return [:]
         }
@@ -244,7 +260,7 @@ private Map getButtonResult(buttonState, buttonNumber = 1) {
         }
     }
     else if (buttonState == 'press') {
-        log.debug "Button was value : $buttonState"
+        logDebug "Button was value : $buttonState"
         state.pressTime = now()
         log.info "presstime: ${state.pressTime}"
         return [:]
@@ -270,5 +286,5 @@ def initialize() {
 }
 
 def ping() {
-    log.debug 'Pinging'
+    logDebug 'Pinging'
 }
