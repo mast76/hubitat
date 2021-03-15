@@ -25,17 +25,18 @@ metadata {
     definition (name: "Ikea TRADFRI Shortcut Button", namespace: "mast76", author: "Martin Stenderup", importUrl: "https://raw.githubusercontent.com/mast76/hubitat/main/drivers/ikea-tradfri-shortcut-button.groovy") {
         capability "Actuator"
         capability "Battery"
-        capability "PushableButton"
+        capability "PushableButton" 
         capability "HoldableButton"        
         capability "Configuration"
         capability "Refresh"
         capability "Sensor"
         capability "HealthCheck"
+        capability "Momentary"
+        command "push"
+        command "hold"
 
         fingerprint model: "TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", profileId:"0104", inClusters:"0000,0001,0003,0009,0020,1000", outClusters:"0003,0004,0006,0008,0019,0102,1000", application:"21" 
     }
-
-    simulator {}
 
     preferences {
 	    section {
@@ -56,7 +57,7 @@ def logDebug(String msg) {
 
 def logTrace(String msg) {
 	if(traceLogging){
-		logTrace msg
+		log.trace msg
 	}
 }
 
@@ -125,39 +126,7 @@ private Map parseNonIasButtonMessage(Map descMap){
     logDebug "parseNonIasButtonMessage"
     def buttonState = ""
     def buttonNumber = 0
-    if ((device.getDataValue("model") == "3460-L") &&(descMap.clusterInt == 0x0006)) {
-        if (descMap.commandInt == 1) {
-            getButtonResult("press")
-        }
-        else if (descMap.commandInt == 0) {
-            getButtonResult("release")
-        }
-    }
-    else if ((device.getDataValue("model") == "3450-L") && (descMap.clusterInt == 0x0006)) {
-        if (descMap.commandInt == 1) {
-            getButtonResult("press")
-        }
-        else if (descMap.commandInt == 0) {
-            def button = 1
-            switch(descMap.sourceEndpoint) {
-                case "01":
-                    button = 4
-                    break
-                case "02":
-                    button = 3
-                    break
-                case "03":
-                    button = 1
-                    break
-                case "04":
-                    button = 2
-                    break
-            }
-        
-            getButtonResult("release", button)
-        }
-    }
-    else if (descMap.clusterInt == 0x0006) {
+    if (descMap.clusterInt == 0x0006) {
         buttonState = "pushed"
         if (descMap.command == "01") {
             buttonNumber = 1
@@ -171,19 +140,6 @@ private Map parseNonIasButtonMessage(Map descMap){
         }
         else {
             return [:]
-        }
-    }
-    else if (descMap.clusterInt == 0x0008) {
-        if (descMap.command == "05") {
-            state.buttonNumber = 1
-            getButtonResult("press", 1)
-        }
-        else if (descMap.command == "01") {
-            state.buttonNumber = 2
-            getButtonResult("press", 2)
-        }
-        else if (descMap.command == "03" || descMap.command == "07") {
-            getButtonResult("release", state.buttonNumber)
         }
     }
 }
@@ -266,6 +222,24 @@ def initialize() {
     // Arrival sensors only goes OFFLINE when Hub is off
     sendEvent(name: "DeviceWatch-Enroll", value: JsonOutput.toJson([protocol: "zigbee", scheme:"untracked"]), displayed: false)
     sendEvent(name: "numberOfButtons", value: 1, displayed: false)
+}
+
+def push(buttonNumber = 1) {
+    if(buttonNumber && buttonNumber > 1) {
+        log.warn("No such button '$buttonNumber'")
+        return 
+    }
+    def descriptionText = "$device.displayName button $buttonNumber was pushed"
+    sendEvent(name: "pushed", value: buttonNumber, descriptionText: descriptionText, isStateChange: true)
+}
+
+def hold(buttonNumber = 1) {
+    if(buttonNumber && buttonNumber > 1) {
+        log.warn("No such button '$buttonNumber'")
+        return 
+    }
+    def descriptionText = "$device.displayName button $buttonNumber was held"
+    sendEvent(name: "held", value: buttonNumber, descriptionText: descriptionText, isStateChange: true)
 }
 
 def ping() {
