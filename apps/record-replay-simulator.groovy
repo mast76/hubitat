@@ -46,11 +46,11 @@ def pageConfig() {
             paragraph "<b>Configuration</b>"
             paragraph "1. Select switch to trigger replay."
             paragraph "2. Select switches to record and perform replay on."
-            paragraph "<b>Usage Exsample</b>"
+            paragraph "<b>Usage Example</b>"
             paragraph "1. Enable recording."
             paragraph "2. Perform your daily life sequence."
             paragraph "3. Stop recording."
-            paragraph "4. Enable replay."
+            paragraph "4. Enable replay, use randomization for reducing predictability."
             paragraph "5. Use Rule Machine to setup at schedule to trigger replay at intervals while away"
         }
         section("<b>Configuration</b>") {
