@@ -21,8 +21,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
+import groovy.json.JsonSlurper
+
 def getAppName(){"Record Replay Simulator"}
-def getVersion(){"1.0.0-alfa"}
+def getVersion(){"1.0.0-beta"}
 
 definition(
 	name: "${getAppName()}",
@@ -74,7 +76,14 @@ def pageConfig() {
             }
         }
         section("<b>Logging</b>") {
-                input "enableDebug", "bool", title: "Enable Debug Logging", required: false, multiple: false, submitOnChange: true
+            input "enableDebug", "bool", title: "Enable Debug Logging", required: false, multiple: false, submitOnChange: true
+        }
+         
+        if(!record && ! replay) {
+            section("Export / Import:") {
+                paragraph "Data format is in a double array. [[millisec,deviceId,on/off],[millisec,deviceId,on/off],...]"
+                input "importData", "text", title: "Recording Data", required: false, defaultValue: state.recording, multiple: false, submitOnChange: true
+            }
         }
         section("<b>Info</b>") {
               paragraph "${getAppName()}" 
@@ -95,6 +104,36 @@ def installed() {
 def updated() {
 	log_debug "Updated with settings: ${settings}"
     unsubscribe()
+    triggerSwitch.off()
+
+    if (importData) {
+        log.info "Validating: $importData"
+        def isValid = true
+        for(row in new JsonSlurper().parseText(importData)) {
+            if(!(row[0] >= 0)) {
+                isValid = false
+                log.error "Not a valid duration!"
+            }
+            if(!actionSwitches.any( { it.deviceNetworkId == row[1] } )) {
+                isValid = false
+                log.error "Not a valid device network id!"
+            }
+            if(row[2] != "on" && row[2] != "off" ) {
+                isValid = false
+                log.error "Not a valid action!"
+            }
+            if(!isValid) {
+                log.error "Data: '$row' are not vaild!"
+                break
+            }
+        }
+        if(isValid) {
+            log.info "Importing: $importData"
+            state.recording = importData
+            app.updateSetting "importData", ""
+        }
+    }
+
 	initialize()
 }
 
@@ -134,7 +173,7 @@ def replayHandler(evt) {
         if(state.recording.size()>=state.replayIndex && !state.breakLoop) {
             def row = state.recording[state.replayIndex]
                 
-            actionSwitches.findAll( { it.id == "${row[1]}"} ).each {
+            actionSwitches.findAll( { it.deviceNetworkId == row[1] } ).each {
                 log_debug "Setting ${row[2]}"
                 if(row[2]=='on') {
                     it.on()
@@ -172,7 +211,7 @@ def deviceHandler(evt) {
             delay = 0
         }
         state.lastEventAt = evt.date.getTime()
-        state.recording += [[delay,evt.deviceId,evt.value]]
+        state.recording += [[delay,evt.device.deviceNetworkId,evt.value]]
     } catch (Exception e) {
         log.error "Recording failed : ${e.message}"
     }
