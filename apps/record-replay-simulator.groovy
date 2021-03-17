@@ -59,6 +59,7 @@ def pageConfig() {
             input "actionSwitches", "capability.switch", title: "Select Action Switches", required: true, multiple: true
             input "factor", "decimal", title: "Replay Speed Factor", defaultValue: 0.0, range: "0..10", required: true, multiple: false
             input "randomization", "enum", title: "Replay Randomization (%)", options: ["0","10","20","30","40","50"], defaultValue: "0", required: true, multiple: false
+            input "delayBeforeFirst", "number", title: "Delay Before First Event in Minutes", defaultValue: 0, required: true, multiple: false
         }
         section("<b>Actions</b>") {
             if(replay) {
@@ -112,37 +113,53 @@ def initialize() {
 
 def triggerHandler(evt) {
     log_debug "Event: ${evt.displayName} : ${evt.value}"
-    if(evt.value=='on') {
-        try {
-            log.info "Starting replay"
-            state.breakLoop = false
-            for(row in state.recording) {
-                if(state.breakLoop) break
-                
-                int pauseInt
-                pauseInt = Math.round(row[0] * factor)
-                pauseInt = Math.round(pauseInt - pauseInt * (randomization as int) / 100 + Math.random() * pauseInt * (randomization as int) * 2)
-                log_debug "Pausing for $pauseInt ms"
-                pauseExecution(pauseInt)
-                log_debug "Replay event"
-                actionSwitches.findAll( { it.id == "${row[1]}"} ).each {
-                    log_debug "Setting ${row[2]}"
-                    if(row[2]=='on') {
-                        it.on()
-                    } else {
-                        it.off()
-                    }
-                }
-            }        
-        } catch (Exception e) {
-            log.error "Replay failed : ${e.message}"
-        } finally {
-            evt.device.off()
-        }   
+    if(evt.value=='on') { 
+        log.info "Starting replay"
+        state.replayIndex=0
+        state.breakLoop = false  
+        int pauseInt = delayBeforeFirst*60
+        pauseInt = Math.round(pauseInt - pauseInt * (randomization as int) / 100 + Math.random() * pauseInt * (randomization as int) * 2)
+        log_debug "Pausing for $pauseInt secs"
+        runIn(pauseInt,replayHandler)
     } else {
-           log_debug "Stopping replay"
+        log.info "Stopping replay"
+        unschedule()
         state.breakLoop = true
     }
+}
+
+def replayHandler(evt) {
+    log_debug "Replay event"
+    try {
+        if(state.recording.size()>=state.replayIndex && !state.breakLoop) {
+            def row = state.recording[state.replayIndex]
+                
+            actionSwitches.findAll( { it.id == "${row[1]}"} ).each {
+                log_debug "Setting ${row[2]}"
+                if(row[2]=='on') {
+                    it.on()
+                } else {
+                    it.off()
+                }
+            }
+            if(state.recording.size()>=state.replayIndex++) {
+                int pauseInt = Math.round(state.recording[state.replayIndex][0] * factor)
+                pauseInt = Math.round(pauseInt - pauseInt * (randomization as int) / 100 + Math.random() * pauseInt * (randomization as int) * 2)
+                pauseInt = pauseInt/1000
+                log_debug "Pausing for $pauseInt secs"
+                runIn(pauseInt,replayHandler)
+            } else {
+                log_debug "No more events to replay."
+                triggerSwitch.off()
+            }
+        } else {
+            log.warn "Replay was canceled!"
+            triggerSwitch.off()
+        }    
+    } catch (Exception e) {
+        log.error "Replay failed : ${e.message}"
+        triggerSwitch.off()
+    } 
 }
 
 def deviceHandler(evt) {
