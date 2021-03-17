@@ -21,14 +21,11 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-
-def setVersion(){
-    state.name = "Record Replay Simulator"
-	state.version = "1.0.0-alfa"
-}
+def getAppName(){"Record Replay Simulator"}
+def getVersion(){"1.0.0-alfa"}
 
 definition(
-	name: "Record Replay Simulator",
+	name: "${getAppName()}",
 	namespace: "mast76",
 	author: "Martin Stenderup",
 	description: "Simulates device actions",
@@ -57,8 +54,11 @@ def pageConfig() {
             paragraph "5. Use Rule Machine to setup at schedule to trigger replay at intervals while away"
         }
         section("<b>Configuration</b>") {
+            label title: "Name", defaultValue: "${getAppName()}", required: true
             input "triggerSwitch", "capability.switch", title: "Select Trigger Switch", required: true, multiple: false
             input "actionSwitches", "capability.switch", title: "Select Action Switches", required: true, multiple: true
+            input "factor", "decimal", title: "Replay Speed Factor", defaultValue: 0.0, range: "0..10", required: true, multiple: false
+            input "randomization", "enum", title: "Replay Randomization (%)", options: ["0","10","20","30","40","50"], defaultValue: "0", required: true, multiple: false
         }
         section("<b>Actions</b>") {
             if(replay) {
@@ -76,7 +76,7 @@ def pageConfig() {
                 input "enableDebug", "bool", title: "Enable Debug Logging", required: false, multiple: false, submitOnChange: true
         }
         section("<b>Info</b>") {
-              paragraph "$state.name" 
+              paragraph "${getAppName()}" 
               paragraph "Installed version $state.version" 
         }
     }
@@ -101,23 +101,29 @@ def initialize() {
 	log_debug "Initialized with settings: ${settings}"
     state.lastEventAt = null
     if(record) {
+        log.info "Recording enabled"
         state.recording = []
         subscribe(actionSwitches, "switch", deviceHandler)
     } else if (replay) {
+        log.info "Replay enabled"
         subscribe(triggerSwitch, "switch", triggerHandler)
     }
 }
 
 def triggerHandler(evt) {
     log_debug "Event: ${evt.displayName} : ${evt.value}"
-    try {
-        if(evt.value=='on') {
-            log_debug "Starting replay"
+    if(evt.value=='on') {
+        try {
+            log.info "Starting replay"
             state.breakLoop = false
             for(row in state.recording) {
                 if(state.breakLoop) break
-                log_debug "Pausing for ${row[0]} ms"
-                pauseExecution(row[0])
+                
+                int pauseInt
+                pauseInt = Math.round(row[0] * factor)
+                pauseInt = Math.round(pauseInt - pauseInt * (randomization as int) / 100 + Math.random() * pauseInt * (randomization as int) * 2)
+                log_debug "Pausing for $pauseInt ms"
+                pauseExecution(pauseInt)
                 log_debug "Replay event"
                 actionSwitches.findAll( { it.id == "${row[1]}"} ).each {
                     log_debug "Setting ${row[2]}"
@@ -127,19 +133,20 @@ def triggerHandler(evt) {
                         it.off()
                     }
                 }
-            } 
-            evt.device.off()  
-        } else {
-            log_debug "Stopping replay"
-            state.breakLoop = true
-        }
-    } catch (Exception e) {
-        log.error "Replay failed : ${e.message}"
+            }        
+        } catch (Exception e) {
+            log.error "Replay failed : ${e.message}"
+        } finally {
+            evt.device.off()
+        }   
+    } else {
+           log_debug "Stopping replay"
+        state.breakLoop = true
     }
 }
 
 def deviceHandler(evt) {
-    log_debug "Event: ${evt.displayName} : ${evt.value}"
+    log_debug "Recording Event: ${evt.displayName} : ${evt.value}"
     try {
         def delay
         if(state.lastEventAt) {
