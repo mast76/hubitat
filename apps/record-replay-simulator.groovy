@@ -24,7 +24,7 @@ SOFTWARE.
 
 def setVersion(){
     state.name = "Record Replay Simulator"
-	state.version = "1.0.0"
+	state.version = "1.0.0-alfa"
 }
 
 definition(
@@ -45,11 +45,22 @@ preferences {
 
 def pageConfig() {
     dynamicPage(name: "", title: "", install: true, uninstall: true) {
-        section() {
+        section("Instructions:", hideable: true, hidden: true) {
+            paragraph "<b>Configuration</b>"
+            paragraph "1. Select switch to trigger replay."
+            paragraph "2. Select switches to record and perform replay on."
+            paragraph "<b>Usage Exsample</b>"
+            paragraph "1. Enable recording."
+            paragraph "2. Perform your daily life sequence."
+            paragraph "3. Stop recording."
+            paragraph "4. Enable replay."
+            paragraph "5. Use Rule Machine to setup at schedule to trigger replay at intervals while away"
+        }
+        section("<b>Configuration</b>") {
             input "triggerSwitch", "capability.switch", title: "Select Trigger Switch", required: true, multiple: false
             input "actionSwitches", "capability.switch", title: "Select Action Switches", required: true, multiple: true
         }
-        section() {
+        section("<b>Actions</b>") {
             if(replay) {
                 record = false
             } else {
@@ -61,8 +72,12 @@ def pageConfig() {
                 input "replay", "bool", title: "Replay Events", required: false, multiple: false, submitOnChange: true
             }
         }
-        section() {
+        section("<b>Logging</b>") {
                 input "enableDebug", "bool", title: "Enable Debug Logging", required: false, multiple: false, submitOnChange: true
+        }
+        section("<b>Info</b>") {
+              paragraph "$state.name" 
+              paragraph "Installed version $state.version" 
         }
     }
 }
@@ -72,7 +87,7 @@ mappings {
 
 def installed() {
 	log_debug "Installed with settings: ${settings}"
-
+    setVersion()
 	initialize()
 }
 
