@@ -45,7 +45,7 @@ preferences {
 
 def pageConfig() {
     dynamicPage(name: "", title: "", install: true, uninstall: true) {
-        section("Instructions:", hideable: true, hidden: true) {
+        section("<b>Instructions:</b>", hideable: true, hidden: true) {
             paragraph "<b>Configuration</b>"
             paragraph "1. Select switch to trigger replay."
             paragraph "2. Select switches to record and perform replay on."
@@ -56,7 +56,7 @@ def pageConfig() {
             paragraph "4. Enable replay, use randomization for reducing predictability."
             paragraph "5. Use Rule Machine to setup at schedule to trigger replay at intervals while away"
         }
-        section("<b>Configuration</b>") {
+        section("<b>Configuration:</b>") {
             label title: "Name", defaultValue: "${getAppName()}", required: true
             input "triggerSwitch", "capability.switch", title: "Select Trigger Switch", required: true, multiple: false, submitOnChange: true
             input "actionSwitches", "capability.switch", title: "Select Action Switches", required: true, multiple: true, submitOnChange: true
@@ -67,7 +67,7 @@ def pageConfig() {
             input "randomization", "enum", title: "Replay Randomization (%)", options: ["0","10","20","30","40","50"], defaultValue: "0", required: true, multiple: false
             input "delayBeforeFirst", "number", title: "Delay Before First Event in Minutes", defaultValue: 0, required: true, multiple: false
         }
-        section("<b>Actions</b>") {
+        section("<b>Actions:</b>") {
             if(replay) {
                 record = false
             } else {
@@ -79,12 +79,12 @@ def pageConfig() {
                 input "replay", "bool", title: "Replay Events", required: false, multiple: false, submitOnChange: true
             }
         }
-        section("<b>Logging</b>") {
+        section("<b>Logging:</b>") {
             input "enableDebug", "bool", title: "Enable Debug Logging", required: false, multiple: false, submitOnChange: true
         }
          
         if(!record && !replay) {
-            section("Export / Import:") {
+            section("<b>Export / Import:</b>", hideable: true, hidden: true) {
                 paragraph "Data format is in a double array. [[millisec,deviceId,on/off],[millisec,deviceId,on/off],...]"
                 input "importData", "text", title: "Recording Data", required: false, defaultValue: JsonOutput.toJson(atomicState.recording), multiple: false, submitOnChange: true
             }
