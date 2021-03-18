@@ -22,9 +22,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
 
 def getAppName(){"Record Replay Simulator"}
-def getVersion(){"1.0.0-beta"}
+def getVersion(){"1.0.0-alfa"}
 
 definition(
 	name: "${getAppName()}",
@@ -57,8 +58,11 @@ def pageConfig() {
         }
         section("<b>Configuration</b>") {
             label title: "Name", defaultValue: "${getAppName()}", required: true
-            input "triggerSwitch", "capability.switch", title: "Select Trigger Switch", required: true, multiple: false
-            input "actionSwitches", "capability.switch", title: "Select Action Switches", required: true, multiple: true
+            input "triggerSwitch", "capability.switch", title: "Select Trigger Switch", required: true, multiple: false, submitOnChange: true
+            input "actionSwitches", "capability.switch", title: "Select Action Switches", required: true, multiple: true, submitOnChange: true
+            if( actionSwitches.any( { it.deviceNetworkId == triggerSwitch.deviceNetworkId } ) ) {
+                paragraph "<i>Warning: Trigger is not allowed as action switch!</i>"
+            }
             input "factor", "decimal", title: "Replay Speed Factor", defaultValue: 0.0, range: "0..10", required: true, multiple: false
             input "randomization", "enum", title: "Replay Randomization (%)", options: ["0","10","20","30","40","50"], defaultValue: "0", required: true, multiple: false
             input "delayBeforeFirst", "number", title: "Delay Before First Event in Minutes", defaultValue: 0, required: true, multiple: false
@@ -79,15 +83,15 @@ def pageConfig() {
             input "enableDebug", "bool", title: "Enable Debug Logging", required: false, multiple: false, submitOnChange: true
         }
          
-        if(!record && ! replay) {
+        if(!record && !replay) {
             section("Export / Import:") {
                 paragraph "Data format is in a double array. [[millisec,deviceId,on/off],[millisec,deviceId,on/off],...]"
-                input "importData", "text", title: "Recording Data", required: false, defaultValue: state.recording, multiple: false, submitOnChange: true
+                input "importData", "text", title: "Recording Data", required: false, defaultValue: JsonOutput.toJson(atomicState.recording), multiple: false, submitOnChange: true
             }
         }
         section("<b>Info</b>") {
               paragraph "${getAppName()}" 
-              paragraph "Installed version $state.version" 
+              paragraph "Installed version ${getVersion()}}" 
         }
     }
 }
@@ -103,46 +107,50 @@ def installed() {
 
 def updated() {
 	log_debug "Updated with settings: ${settings}"
-    unsubscribe()
+    unsubscribe(triggerSwitch)
     triggerSwitch.off()
-
+    unsubscribe(actionSwitches)
     if (importData) {
-        log.info "Validating: $importData"
-        def isValid = true
-        for(row in new JsonSlurper().parseText(importData)) {
-            if(!(row[0] >= 0)) {
-                isValid = false
-                log.error "Not a valid duration!"
+        try {
+            log.info "Validating: $importData"
+            def isValid = true
+            def jsonArray = new JsonSlurper().parseText(importData)
+            for(row in jsonArray) {
+                if(!(row[0] >= 0)) {
+                    isValid = false
+                    log.error "Not a valid duration!"
+                }
+                if(!actionSwitches.any( { it.deviceNetworkId == row[1] } )) {
+                    isValid = false
+                    log.error "Not a valid device network id!"
+                }
+                if(row[2] != "on" && row[2] != "off" ) {
+                    isValid = false
+                    log.error "Not a valid action!"
+                }
+                if(!isValid) {
+                    log.error "Data: '$row' are not vaild!"
+                    break
+                }
             }
-            if(!actionSwitches.any( { it.deviceNetworkId == row[1] } )) {
-                isValid = false
-                log.error "Not a valid device network id!"
+            if(isValid) {
+                log.info "Importing: $importData"
+                atomicState.recording = jsonArray
             }
-            if(row[2] != "on" && row[2] != "off" ) {
-                isValid = false
-                log.error "Not a valid action!"
-            }
-            if(!isValid) {
-                log.error "Data: '$row' are not vaild!"
-                break
-            }
+        } catch (Exception e) {
+            log.error "Import failed: $importData"
         }
-        if(isValid) {
-            log.info "Importing: $importData"
-            state.recording = importData
-            app.updateSetting "importData", ""
-        }
+        app.updateSetting "importData", ""
     }
-
 	initialize()
 }
 
 def initialize() {
 	log_debug "Initialized with settings: ${settings}"
-    state.lastEventAt = null
+    atomicState.lastEventAt = null
     if(record) {
         log.info "Recording enabled"
-        state.recording = []
+        atomicState.recording = []
         subscribe(actionSwitches, "switch", deviceHandler)
     } else if (replay) {
         log.info "Replay enabled"
@@ -154,8 +162,8 @@ def triggerHandler(evt) {
     log_debug "Event: ${evt.displayName} : ${evt.value}"
     if(evt.value=='on') { 
         log.info "Starting replay"
-        state.replayIndex=0
-        state.breakLoop = false  
+        atomicState.replayIndex = 0
+        atomicState.breakLoop = false  
         int pauseInt = delayBeforeFirst*60
         pauseInt = Math.round(pauseInt - pauseInt * (randomization as int) / 100 + Math.random() * pauseInt * (randomization as int) * 2)
         log_debug "Pausing for $pauseInt secs"
@@ -163,15 +171,19 @@ def triggerHandler(evt) {
     } else {
         log.info "Stopping replay"
         unschedule()
-        state.breakLoop = true
+        atomicState.breakLoop = true
     }
 }
 
 def replayHandler(evt) {
-    log_debug "Replay event"
+    if(!replay) {
+        log.warn "Got Replay Event while replay are disabled!"
+        return 
+    }
     try {
-        if(state.recording.size()>=state.replayIndex && !state.breakLoop) {
-            def row = state.recording[state.replayIndex]
+        if(atomicState.recording.size()>atomicState.replayIndex && !atomicState.breakLoop) {
+            def row = atomicState.recording[atomicState.replayIndex++]
+            log_debug "Replay event $row"
                 
             actionSwitches.findAll( { it.deviceNetworkId == row[1] } ).each {
                 log_debug "Setting ${row[2]}"
@@ -181,8 +193,8 @@ def replayHandler(evt) {
                     it.off()
                 }
             }
-            if(state.recording.size()>=state.replayIndex++) {
-                int pauseInt = Math.round(state.recording[state.replayIndex][0] * factor)
+            if(atomicState.recording.size()>atomicState.replayIndex) {
+                int pauseInt = Math.round(atomicState.recording[atomicState.replayIndex][0] * factor)
                 pauseInt = Math.round(pauseInt - pauseInt * (randomization as int) / 100 + Math.random() * pauseInt * (randomization as int) * 2)
                 pauseInt = pauseInt/1000
                 log_debug "Pausing for $pauseInt secs"
@@ -196,22 +208,26 @@ def replayHandler(evt) {
             triggerSwitch.off()
         }    
     } catch (Exception e) {
-        log.error "Replay failed : ${e.message}"
+        log_error "Replay failed", e
         triggerSwitch.off()
     } 
 }
 
 def deviceHandler(evt) {
     log_debug "Recording Event: ${evt.displayName} : ${evt.value}"
+    if(!record) {
+        log.warn "Got Recording Event while record are disabled!"
+        return 
+    }
     try {
         def delay
-        if(state.lastEventAt) {
-            delay = evt.date.getTime() - state.lastEventAt
+        if(atomicState.lastEventAt) {
+            delay = evt.date.getTime() - atomicState.lastEventAt
         } else {
             delay = 0
         }
-        state.lastEventAt = evt.date.getTime()
-        state.recording += [[delay,evt.device.deviceNetworkId,evt.value]]
+        atomicState.lastEventAt = evt.date.getTime() 
+        atomicState.recording += [[delay,evt.device.deviceNetworkId,evt.value]]
     } catch (Exception e) {
         log.error "Recording failed : ${e.message}"
     }
@@ -223,4 +239,8 @@ def uninstalled() {
 
 def log_debug(msg) {
 	if (enableDebug) log.debug(msg)
+}
+
+def log_error(msg,e) {
+     log.error "$msg\n ${e.getStackTrace().toString()}"
 }
