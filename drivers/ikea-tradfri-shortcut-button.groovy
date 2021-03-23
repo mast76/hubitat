@@ -44,7 +44,7 @@ metadata {
 			input(name: "traceLogging", type: "bool", title: "Enable trace logging", description: "", defaultValue: false, submitOnChange: true, displayDuringSetup: false, required:false)			
 		}
         section {
-            input ("holdTime", "number", title: "Minimum time in seconds for a press to count as \"held\"", defaultValue: 0.5, displayDuringSetup: false)
+            input ("holdTime", "decimal", title: "Minimum time in seconds for a press to count as \"held\"", defaultValue: 0.5, displayDuringSetup: false)
         }
     }
 }
@@ -66,20 +66,26 @@ def parse(String description) {
     logDebug "description is $description"
     def event = zigbee.getEvent(description)
     if (event) {
+        logTrace "Could use getEvent for parsing."
         sendEvent(event)
     }
     else {
+        logTrace "Could not use getEvent for parsing, trying custom parsing."
         if ((description?.startsWith("catchall:")) || (description?.startsWith("read attr -"))) {
+            logTrace "Got type of event."
             def descMap = zigbee.parseDescriptionAsMap(description)
             if (descMap.clusterInt == 0x0001 && descMap.attrInt == 0x0020 && descMap.value != null) {
+                logTrace "Matched cluster to battery event."
                 event = getBatteryResult(zigbee.convertHexToInt(descMap.value))
             }
-            else if (descMap.clusterInt == 0x0006 || descMap.clusterInt == 0x0008) {
-                event = parseNonIasButtonMessage(descMap)
+            else if (descMap.clusterInt == 0x0006) {
+                logTrace "Matched cluster to short press event."
+                event = parseShortPress(descMap)
             }
-        }
-        else if (description?.startsWith('zone status')) {
-            event = parseIasButtonMessage(description)
+            else if (descMap.clusterInt == 0x0008) {
+                logTrace "Matched cluster to level / long press event."
+                event = parseLongPress(descMap)
+            }
         }
 
         logDebug "Parse returned $event"
@@ -93,11 +99,17 @@ def parse(String description) {
     }
 }
 
-private Map parseIasButtonMessage(String description) {
-    logTrace "parseIasButtonMessage"
-    logDebug "description is $description"
-    def zs = zigbee.parseZoneStatus(description)
-    return zs.isAlarm2Set() ? getButtonResult("press") : getButtonResult("release")
+private Map parseLongPress(descMap) {
+    logTrace "parseLongPress"
+    logDebug JsonOutput.toJson(descMap)
+    if(descMap.command == "05") {
+        getButtonResult("press")
+    }
+    else if(descMap.command == "07") {
+        getButtonResult("release")
+    } else {
+        return [:]
+    }
 }
 
 private Map getBatteryResult(rawValue) {
@@ -122,8 +134,8 @@ private Map getBatteryResult(rawValue) {
     }
 }
 
-private Map parseNonIasButtonMessage(Map descMap){
-    logDebug "parseNonIasButtonMessage"
+private Map parseShortPress(Map descMap){
+    logDebug "parseShortPress"
     def buttonState = ""
     def buttonNumber = 0
     if (descMap.clusterInt == 0x0006) {
@@ -180,9 +192,9 @@ private Map getButtonResult(buttonState, buttonNumber = 1) {
         }
         def timeDiff = now() - state.pressTime
         log.info "timeDiff: $timeDiff"
-        def holdPreference = holdTime ?: 0.5
+        def holdPreference = (holdTime as double) ?: 0.5
         log.info "holdp1 : $holdPreference"
-        holdPreference = (holdPreference as int) * 1000
+        holdPreference = Math.round(holdPreference  * 1000)
         log.info "holdp2 : $holdPreference"
         if (timeDiff > 10000) {         //timeDiff>10sec check for refresh sending release value causing actions to be executed
             return [:]
