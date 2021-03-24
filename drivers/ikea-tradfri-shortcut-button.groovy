@@ -176,7 +176,11 @@ def configure() {
         "zdo bind 0x${device.deviceNetworkId} 1 1 6 {${device.zigbeeId}} {}", "delay 300",
         "zdo bind 0x${device.deviceNetworkId} 2 1 6 {${device.zigbeeId}} {}", "delay 300",
         "zdo bind 0x${device.deviceNetworkId} 3 1 6 {${device.zigbeeId}} {}", "delay 300",
-        "zdo bind 0x${device.deviceNetworkId} 4 1 6 {${device.zigbeeId}} {}", "delay 300"
+        "zdo bind 0x${device.deviceNetworkId} 4 1 6 {${device.zigbeeId}} {}", "delay 300",
+        "zdo bind 0x${device.deviceNetworkId} 1 1 8 {${device.zigbeeId}} {}", "delay 300",
+        "zdo bind 0x${device.deviceNetworkId} 2 1 8 {${device.zigbeeId}} {}", "delay 300",
+        "zdo bind 0x${device.deviceNetworkId} 3 1 8 {${device.zigbeeId}} {}", "delay 300",
+        "zdo bind 0x${device.deviceNetworkId} 4 1 8 {${device.zigbeeId}} {}", "delay 300"
     )
     return cmds
 
