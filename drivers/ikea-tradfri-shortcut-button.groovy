@@ -86,6 +86,15 @@ def parse(String description) {
                 logTrace "Matched cluster to level / long press event."
                 event = parseLongPress(descMap)
             }
+            else if (descMap.clusterInt == 0x8021) {
+                logDebug "Matched bind responce"
+            }
+            else if (descMap.clusterInt == 0x8022) {
+                logDebug "Matched unbind responce"
+            }  
+            else if (descMap.clusterInt == 0x0500) {
+                logDebug "Matched IAS Zone"
+            }
         }
 
         logDebug "Parse returned $event"
