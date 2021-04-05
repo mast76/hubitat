@@ -20,6 +20,7 @@
 
 import groovy.json.JsonOutput
 import hubitat.zigbee.zcl.DataType
+import groovy.transform.Field
 
 metadata {
     definition (name: 'Ikea TRADFRI Shortcut Button', namespace: 'mast76', author: 'Martin Stenderup', importUrl: 'https://raw.githubusercontent.com/mast76/hubitat/main/drivers/ikea-tradfri-shortcut-button.groovy') {
@@ -145,8 +146,8 @@ private Map getBatteryResult(rawValue) {
     }
 }
 
-@groovy.transform.Field
-static boolean redundencyCheck = false
+@Field
+static boolean redundancyCheck = false
 
 private Map parseShortPress(Map descMap) {
     logDebug 'parseShortPress'
