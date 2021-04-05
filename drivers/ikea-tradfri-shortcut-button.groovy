@@ -39,12 +39,14 @@ metadata {
     }
 
     preferences {
-        section {
+        section ('<b>Logging</b>') {
             input(name: 'debugLogging', type: 'bool', title: 'Enable debug logging', description: '', defaultValue: false, submitOnChange: true, displayDuringSetup: false, required: false)
-            input(name: 'traceLogging', type: 'bool', title: 'Enable trace logging', description: '', defaultValue: false, submitOnChange: true, displayDuringSetup: false, required:false)
+            input (name: 'traceLogging', type: 'bool', title: 'Enable trace logging', description: '', defaultValue: false, submitOnChange: true, displayDuringSetup: false, required:false)
         }
-        section {
-            input ('holdTime', 'decimal', title: "Minimum time in seconds for a press to count as \"held\"", defaultValue: 0.5, displayDuringSetup: false)
+        section ('<b>Experimential</b>') {
+            input('holdTime', 'decimal', title: "Minimum time in seconds for a press to count as \"held\"", defaultValue: 0.5, displayDuringSetup: false)
+            input('eliminateDuplicatesMS', 'number', title: 'Time in milliseconds to gather as one event', defaultValue: 100, displayDuringSetup: false, required:false)
+            input(name: 'extraZdoBinds', type: 'bool', title: 'Enable extra ZDO binds', description: '', defaultValue: false, displayDuringSetup: false, required: false)
         }
     }
 }
@@ -143,6 +145,9 @@ private Map getBatteryResult(rawValue) {
     }
 }
 
+@groovy.transform.Field
+static boolean redundencyCheck = false
+
 private Map parseShortPress(Map descMap) {
     logDebug 'parseShortPress'
     def buttonState = ''
@@ -157,11 +162,17 @@ private Map parseShortPress(Map descMap) {
         }
         if (buttonNumber != 0) {
             def descriptionText = "$device.displayName button $buttonNumber was $buttonState"
-            return createEvent(name: buttonState, value: buttonNumber, descriptionText: descriptionText, isStateChange: true)
+
+            if (redundencyCheck) {
+                logDebug 'Redundant message - ignored!'
+                return
+            }
+            redundencyCheck = true
+            sendEvent(name: buttonState, value: buttonNumber, descriptionText: descriptionText, isStateChange: true)
+            pauseExecution eliminateDuplicatesMS
+            redundencyCheck = false
         }
-        else {
-            return [:]
-        }
+        return [:]
     }
 }
 
@@ -180,17 +191,13 @@ def configure() {
     cmds.addAll(zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20, DataType.UINT8, 30, 21600, 0x01))
     cmds.addAll(zigbee.enrollResponse())
     cmds.addAll(zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20))
-    logDebug (device.getDataValue('model'))
-    cmds.addAll(
-        "zdo bind 0x${device.deviceNetworkId} 1 1 6 {${device.zigbeeId}} {}", 'delay 300',
-        "zdo bind 0x${device.deviceNetworkId} 2 1 6 {${device.zigbeeId}} {}", 'delay 300',
-        "zdo bind 0x${device.deviceNetworkId} 3 1 6 {${device.zigbeeId}} {}", 'delay 300',
-        "zdo bind 0x${device.deviceNetworkId} 4 1 6 {${device.zigbeeId}} {}", 'delay 300',
-        "zdo bind 0x${device.deviceNetworkId} 1 1 8 {${device.zigbeeId}} {}", 'delay 300',
-        "zdo bind 0x${device.deviceNetworkId} 2 1 8 {${device.zigbeeId}} {}", 'delay 300',
-        "zdo bind 0x${device.deviceNetworkId} 3 1 8 {${device.zigbeeId}} {}", 'delay 300',
-        "zdo bind 0x${device.deviceNetworkId} 4 1 8 {${device.zigbeeId}} {}", 'delay 300'
-    )
+
+    if (enableExtraZdoBinds) {
+        cmds.addAll(
+            "zdo bind 0x${device.deviceNetworkId} 1 1 6 {${device.zigbeeId}} {}", 'delay 300',
+            "zdo bind 0x${device.deviceNetworkId} 1 1 8 {${device.zigbeeId}} {}", 'delay 300'
+        )
+    }
     return cmds
 }
 
@@ -245,7 +252,7 @@ def updated() {
 def initialize() {
     // Arrival sensors only goes OFFLINE when Hub is off
     sendEvent(name: 'DeviceWatch-Enroll', value: JsonOutput.toJson([protocol: 'zigbee', scheme:'untracked']), displayed: false)
-    sendEvent(name: 'numberOfButtons', value: 1, displayed: false)
+    sendEvent(name: 'numberOfButtons', value: 2, displayed: false)
 }
 
 def push(buttonNumber = 1) {
