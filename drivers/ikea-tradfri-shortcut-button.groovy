@@ -22,78 +22,78 @@ import groovy.json.JsonOutput
 import hubitat.zigbee.zcl.DataType
 
 metadata {
-    definition (name: "Ikea TRADFRI Shortcut Button", namespace: "mast76", author: "Martin Stenderup", importUrl: "https://raw.githubusercontent.com/mast76/hubitat/main/drivers/ikea-tradfri-shortcut-button.groovy") {
-        capability "Actuator"
-        capability "Battery"
-        capability "PushableButton" 
-        capability "HoldableButton"        
-        capability "Configuration"
-        capability "Refresh"
-        capability "Sensor"
-        capability "HealthCheck"
-        capability "Momentary"
-        command "push"
-        command "hold"
+    definition (name: 'Ikea TRADFRI Shortcut Button', namespace: 'mast76', author: 'Martin Stenderup', importUrl: 'https://raw.githubusercontent.com/mast76/hubitat/main/drivers/ikea-tradfri-shortcut-button.groovy') {
+        capability 'Actuator'
+        capability 'Battery'
+        capability 'PushableButton'
+        capability 'HoldableButton'
+        capability 'Configuration'
+        capability 'Refresh'
+        capability 'Sensor'
+        capability 'HealthCheck'
+        capability 'Momentary'
+        command 'push'
+        command 'hold'
 
-        fingerprint model: "TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", profileId:"0104", inClusters:"0000,0001,0003,0009,0020,1000", outClusters:"0003,0004,0006,0008,0019,0102,1000", application:"21" 
+        fingerprint model: 'TRADFRI SHORTCUT Button', manufacturer:'IKEA of Sweden', profileId:'0104', inClusters:'0000,0001,0003,0009,0020,1000', outClusters:'0003,0004,0006,0008,0019,0102,1000', application:'21'
     }
 
     preferences {
-	    section {
-			input(name: "debugLogging", type: "bool", title: "Enable debug logging", description: "", defaultValue: false, submitOnChange: true, displayDuringSetup: false, required: false)
-			input(name: "traceLogging", type: "bool", title: "Enable trace logging", description: "", defaultValue: false, submitOnChange: true, displayDuringSetup: false, required:false)			
-		}
         section {
-            input ("holdTime", "decimal", title: "Minimum time in seconds for a press to count as \"held\"", defaultValue: 0.5, displayDuringSetup: false)
+            input(name: 'debugLogging', type: 'bool', title: 'Enable debug logging', description: '', defaultValue: false, submitOnChange: true, displayDuringSetup: false, required: false)
+            input(name: 'traceLogging', type: 'bool', title: 'Enable trace logging', description: '', defaultValue: false, submitOnChange: true, displayDuringSetup: false, required:false)
+        }
+        section {
+            input ('holdTime', 'decimal', title: "Minimum time in seconds for a press to count as \"held\"", defaultValue: 0.5, displayDuringSetup: false)
         }
     }
 }
 
 def logDebug(String msg) {
-	if(debugLogging) {
-		log.debug msg
-	}
+    if (debugLogging) {
+        log.debug msg
+    }
 }
 
 def logTrace(String msg) {
-	if(traceLogging){
-		log.trace msg
-	}
+    if (traceLogging) {
+        log.trace msg
+    }
 }
 
 def parse(String description) {
-    logTrace "parse"
+    logTrace 'parse'
     logDebug "description is $description"
     def event = zigbee.getEvent(description)
     if (event) {
-        logTrace "Could use getEvent for parsing."
+        logTrace 'Could use getEvent for parsing.'
         sendEvent(event)
     }
     else {
-        logTrace "Could not use getEvent for parsing, trying custom parsing."
-        if ((description?.startsWith("catchall:")) || (description?.startsWith("read attr -"))) {
-            logTrace "Got type of event."
+        logTrace 'Could not use getEvent for parsing, trying custom parsing.'
+        if ((description?.startsWith('catchall:')) || (description?.startsWith('read attr -'))) {
+            logTrace 'Got type of event.'
             def descMap = zigbee.parseDescriptionAsMap(description)
             if (descMap.clusterInt == 0x0001 && descMap.attrInt == 0x0020 && descMap.value != null) {
-                logTrace "Matched cluster to battery event."
+                logTrace 'Matched cluster to battery event.'
                 event = getBatteryResult(zigbee.convertHexToInt(descMap.value))
             }
             else if (descMap.clusterInt == 0x0006) {
-                logTrace "Matched cluster to short press event."
+                logTrace 'Matched cluster to short press event.'
                 event = parseShortPress(descMap)
             }
             else if (descMap.clusterInt == 0x0008) {
-                logTrace "Matched cluster to level / long press event."
+                logTrace 'Matched cluster to level / long press event.'
                 event = parseLongPress(descMap)
             }
             else if (descMap.clusterInt == 0x8021) {
-                logDebug "Matched bind responce"
+                logDebug 'Matched bind responce'
             }
             else if (descMap.clusterInt == 0x8022) {
-                logDebug "Matched unbind responce"
-            }  
+                logDebug 'Matched unbind responce'
+            }
             else if (descMap.clusterInt == 0x0500) {
-                logDebug "Matched IAS Zone"
+                logDebug 'Matched IAS Zone'
             }
         }
 
@@ -109,13 +109,13 @@ def parse(String description) {
 }
 
 private Map parseLongPress(descMap) {
-    logTrace "parseLongPress"
+    logTrace 'parseLongPress'
     logDebug JsonOutput.toJson(descMap)
-    if(descMap.command == "05") {
-        getButtonResult("press")
+    if (descMap.command == '05') {
+        getButtonResult('press')
     }
-    else if(descMap.command == "07") {
-        getButtonResult("release")
+    else if (descMap.command == '07') {
+        getButtonResult('release')
     } else {
         return [:]
     }
@@ -143,19 +143,19 @@ private Map getBatteryResult(rawValue) {
     }
 }
 
-private Map parseShortPress(Map descMap){
-    logDebug "parseShortPress"
-    def buttonState = ""
+private Map parseShortPress(Map descMap) {
+    logDebug 'parseShortPress'
+    def buttonState = ''
     def buttonNumber = 0
     if (descMap.clusterInt == 0x0006) {
-        buttonState = "pushed"
-        if (descMap.command == "01") {
+        buttonState = 'pushed'
+        if (descMap.command == '01') {
             buttonNumber = 1
         }
-        else if (descMap.command == "00") {
+        else if (descMap.command == '00') {
             buttonNumber = 2
         }
-        if (buttonNumber !=0) {
+        if (buttonNumber != 0) {
             def descriptionText = "$device.displayName button $buttonNumber was $buttonState"
             return createEvent(name: buttonState, value: buttonNumber, descriptionText: descriptionText, isStateChange: true)
         }
@@ -166,41 +166,40 @@ private Map parseShortPress(Map descMap){
 }
 
 def refresh() {
-    logDebug "Refreshing Battery"
+    logDebug 'Refreshing Battery'
 
     return zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20) +
             zigbee.enrollResponse()
 }
 
 def configure() {
-    logDebug "Configuring Reporting, IAS CIE, and Bindings."
+    logDebug 'Configuring Reporting, IAS CIE, and Bindings.'
     List<String> cmds = []
     cmds.addAll(zigbee.onOffConfig())
     cmds.addAll(zigbee.levelConfig())
     cmds.addAll(zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20, DataType.UINT8, 30, 21600, 0x01))
     cmds.addAll(zigbee.enrollResponse())
     cmds.addAll(zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20))
-    logDebug (device.getDataValue("model"))
+    logDebug (device.getDataValue('model'))
     cmds.addAll(
-        "zdo bind 0x${device.deviceNetworkId} 1 1 6 {${device.zigbeeId}} {}", "delay 300",
-        "zdo bind 0x${device.deviceNetworkId} 2 1 6 {${device.zigbeeId}} {}", "delay 300",
-        "zdo bind 0x${device.deviceNetworkId} 3 1 6 {${device.zigbeeId}} {}", "delay 300",
-        "zdo bind 0x${device.deviceNetworkId} 4 1 6 {${device.zigbeeId}} {}", "delay 300",
-        "zdo bind 0x${device.deviceNetworkId} 1 1 8 {${device.zigbeeId}} {}", "delay 300",
-        "zdo bind 0x${device.deviceNetworkId} 2 1 8 {${device.zigbeeId}} {}", "delay 300",
-        "zdo bind 0x${device.deviceNetworkId} 3 1 8 {${device.zigbeeId}} {}", "delay 300",
-        "zdo bind 0x${device.deviceNetworkId} 4 1 8 {${device.zigbeeId}} {}", "delay 300"
+        "zdo bind 0x${device.deviceNetworkId} 1 1 6 {${device.zigbeeId}} {}", 'delay 300',
+        "zdo bind 0x${device.deviceNetworkId} 2 1 6 {${device.zigbeeId}} {}", 'delay 300',
+        "zdo bind 0x${device.deviceNetworkId} 3 1 6 {${device.zigbeeId}} {}", 'delay 300',
+        "zdo bind 0x${device.deviceNetworkId} 4 1 6 {${device.zigbeeId}} {}", 'delay 300',
+        "zdo bind 0x${device.deviceNetworkId} 1 1 8 {${device.zigbeeId}} {}", 'delay 300',
+        "zdo bind 0x${device.deviceNetworkId} 2 1 8 {${device.zigbeeId}} {}", 'delay 300',
+        "zdo bind 0x${device.deviceNetworkId} 3 1 8 {${device.zigbeeId}} {}", 'delay 300',
+        "zdo bind 0x${device.deviceNetworkId} 4 1 8 {${device.zigbeeId}} {}", 'delay 300'
     )
     return cmds
-
 }
 
 private Map getButtonResult(buttonState, buttonNumber = 1) {
-    logTrace "getButtonResult"
+    logTrace 'getButtonResult'
     logDebug "buttonState = $buttonState, buttonNumber = buttonNumber"
     if (buttonState == 'release') {
         logDebug "Button was value : $buttonState"
-        if(state.pressTime == null) {
+        if (state.pressTime == null) {
             return [:]
         }
         def timeDiff = now() - state.pressTime
@@ -214,10 +213,10 @@ private Map getButtonResult(buttonState, buttonNumber = 1) {
         }
         else {
             if (timeDiff < holdPreference) {
-                buttonState = "pushed"
+                buttonState = 'pushed'
             }
             else {
-                buttonState = "held"
+                buttonState = 'held'
             }
             def descriptionText = "$device.displayName button $buttonNumber was $buttonState"
             return createEvent(name: buttonState, value: buttonNumber, descriptionText: descriptionText, isStateChange: true)
@@ -235,8 +234,8 @@ def installed() {
     initialize()
 
     // Initialize default states
-    device.currentValue("numberOfButtons")?.times {
-        sendEvent(name: "pushed", value: it+1, displayed: false)
+    device.currentValue('numberOfButtons')?.times {
+        sendEvent(name: 'pushed', value: it + 1, displayed: false)
     }
 }
 
@@ -245,26 +244,26 @@ def updated() {
 }
 def initialize() {
     // Arrival sensors only goes OFFLINE when Hub is off
-    sendEvent(name: "DeviceWatch-Enroll", value: JsonOutput.toJson([protocol: "zigbee", scheme:"untracked"]), displayed: false)
-    sendEvent(name: "numberOfButtons", value: 1, displayed: false)
+    sendEvent(name: 'DeviceWatch-Enroll', value: JsonOutput.toJson([protocol: 'zigbee', scheme:'untracked']), displayed: false)
+    sendEvent(name: 'numberOfButtons', value: 1, displayed: false)
 }
 
 def push(buttonNumber = 1) {
-    if(buttonNumber && buttonNumber > 1) {
+    if (buttonNumber && buttonNumber > 1) {
         log.warn("No such button '$buttonNumber'")
-        return 
+        return
     }
     def descriptionText = "$device.displayName button $buttonNumber was pushed"
-    sendEvent(name: "pushed", value: buttonNumber, descriptionText: descriptionText, isStateChange: true)
+    sendEvent(name: 'pushed', value: buttonNumber, descriptionText: descriptionText, isStateChange: true)
 }
 
 def hold(buttonNumber = 1) {
-    if(buttonNumber && buttonNumber > 1) {
+    if (buttonNumber && buttonNumber > 1) {
         log.warn("No such button '$buttonNumber'")
-        return 
+        return
     }
     def descriptionText = "$device.displayName button $buttonNumber was held"
-    sendEvent(name: "held", value: buttonNumber, descriptionText: descriptionText, isStateChange: true)
+    sendEvent(name: 'held', value: buttonNumber, descriptionText: descriptionText, isStateChange: true)
 }
 
 def ping() {
