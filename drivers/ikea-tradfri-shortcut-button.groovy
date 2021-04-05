@@ -164,14 +164,14 @@ private Map parseShortPress(Map descMap) {
         if (buttonNumber != 0) {
             def descriptionText = "$device.displayName button $buttonNumber was $buttonState"
 
-            if (redundencyCheck) {
+            if (redundancyCheck) {
                 logDebug 'Redundant message - ignored!'
                 return
             }
-            redundencyCheck = true
+            redundancyCheck = true
             sendEvent(name: buttonState, value: buttonNumber, descriptionText: descriptionText, isStateChange: true)
             pauseExecution eliminateDuplicatesMS
-            redundencyCheck = false
+            redundancyCheck = false
         }
         return [:]
     }
